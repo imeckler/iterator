@@ -1,6 +1,6 @@
 module Iterator
   ( map
-  , upTo
+  , upTil
   , range
   , concat
   , concatMap
@@ -25,7 +25,8 @@ concatenation, and most importantly, folding in constant space with early return
 @docs fold, Status, foldWhile, find
 -}
 
-import Native.Iterator
+import Trampoline
+import Trampoline(Trampoline(..))
 
 type Iterator a
   = Fun Int (Int -> a)
@@ -80,11 +81,37 @@ can thus express `find : (a -> Bool) -> Iterator a -> Maybe a` as
              (KeepGoing Nothing)
 -}
 foldWhile : (a -> b -> Status b) -> Status b -> Iterator a -> b
-foldWhile = Native.Iterator.foldWhile
+foldWhile f z t = extract <| foldWhile' f z t
+
+foldWhileFun' : (a -> b -> Status b) -> Status b -> Int -> (Int -> a) -> Status b
+foldWhileFun' f z n g =
+  let go acc k = case acc of
+        Finished _  -> Done acc
+        KeepGoing x ->
+          if k == n then Done (KeepGoing x) else Continue (\() -> go (f (g k) x) (k + 1))
+  in
+  Trampoline.trampoline (go z 0)
+
+extract : Status a -> a
+extract t = case t of
+  Finished x  -> x
+  KeepGoing x -> x
+
+foldWhile' : (a -> b -> Status b) -> Status b -> Iterator a -> Status b
+foldWhile' f z t = case t of
+  Fun n g -> foldWhileFun' f z n g
+  Cat n g -> foldWhileFun' (\tt acc -> foldWhile' f (KeepGoing acc) tt) z n g -- (\tt acc -> foldWhile f (KeepGoing acc) tt) z n g
+
+foldFun : (a -> b -> b) -> b -> Int -> (Int -> a) -> b
+foldFun f z n g =
+  let go acc i = if i == n then Done acc else Continue (\() -> go (f (g i) acc) (i + 1)) in
+  Trampoline.trampoline (go z 0)
 
 {-| Folds until the bitter end. -}
 fold : (a -> b -> b) -> b -> Iterator a -> b
-fold = Native.Iterator.fold
+fold f z t = case t of
+  Fun n g -> foldFun f z n g
+  Cat n g -> foldFun (\tt acc -> fold f acc tt) z n g
 
 {-| `find` the first element in your sequence satisfying the given property. -}
 find : (a -> Bool) -> Iterator a -> Maybe a
