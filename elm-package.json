@@ -1,12 +1,14 @@
 {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "summary": "Pure foldable iterators",
     "repository": "https://github.com/imeckler/iterator.git",
     "license": "BSD3",
     "source-directories": [
         "."
     ],
-    "exposed-modules": ["Iterator"],
+    "exposed-modules": [
+        "Iterator"
+    ],
     "dependencies": {
         "elm-lang/core": "1.1.0 <= v < 2.0.0",
         "uehaj/IntRange": "1.0.1 <= v < 2.0.0"

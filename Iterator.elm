@@ -5,9 +5,15 @@ module Iterator
   , concat
   , concatMap
   , Status(..)
+  , fromList
+  , fromArray
+  , indexedMap
   , foldWhile
   , fold
   , find
+  , findMany
+  , all
+  , and
   , Iterator
   ) where
 
@@ -16,15 +22,17 @@ an `Int` indicating its "length". It's a simple data type supporting mapping,
 concatenation, and most importantly, folding in constant space with early return.
 
 # Introduction
-@docs upTil, range
+@docs upTil, range, fromArray, fromList
 
 # Transformation
-@docs map, concat, concatMap
+@docs map, concat, concatMap, indexedMap
 
 # Elimination
-@docs fold, Status, foldWhile, find
+@docs fold, Status, foldWhile, find, all, and
 -}
 
+import List((::))
+import Array
 import Trampoline
 import Trampoline(Trampoline(..))
 
@@ -37,6 +45,11 @@ map : (a -> b) -> Iterator a -> Iterator b
 map f t = case t of
   Fun n g -> Fun n (f << g)
   Cat n g -> Cat n (map f << g)
+
+indexedMap : (Int -> a -> b) -> Iterator a -> Iterator b
+indexedMap f t = case t of
+  Fun n g -> Fun n (\i -> f i (g i))
+  Cat n g -> Cat n (indexedMap f << g)
 
 {-| `upTil n f` is conceptually the sequence 
 
@@ -51,6 +64,15 @@ upTil = Fun
 -}
 range : Int -> Int -> Iterator Int
 range start stop = upTil (stop - start + 1) (\i -> start + i)
+
+fromList : List a -> Iterator a
+fromList = fromArray << Array.fromList
+
+fromArray : Array.Array a -> Iterator a
+fromArray a =
+  let n = Array.length a in
+  upTil n (\i -> case Array.get i a of Just x -> x)
+
 
 {-| Concatenate an iterator of iterators. -}
 concat : Iterator (Iterator a) -> Iterator a
@@ -119,4 +141,19 @@ fold f z t = case t of
 {-| `find` the first element in your sequence satisfying the given property. -}
 find : (a -> Bool) -> Iterator a -> Maybe a
 find f = foldWhile (\x _ -> if f x then Finished (Just x) else KeepGoing Nothing) (KeepGoing Nothing)
+
+{-| Find the at most `k` first elements in the sequence satisfying the given property. -}
+findMany : Int -> (a -> Bool) -> Iterator a -> List a
+findMany k p = fst << foldWhile (\x (acc, n) ->
+  if | n == 0    -> Finished (acc, 0)
+     | p x       -> KeepGoing (x::acc, n - 1)
+     | otherwise -> KeepGoing (acc, n)) (KeepGoing ([], k))
+
+-- TODO: I guess there's no evidenceful version of this.
+{-| Check if `all` element in your sequence satisfy the given property. -}
+all : (a -> Bool) -> Iterator a -> Bool
+all p = foldWhile (\x _ -> if p x then KeepGoing True else Finished False) (KeepGoing True)
+
+and : Iterator Bool -> Bool
+and = all identity
 
