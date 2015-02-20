@@ -39,12 +39,14 @@ map f t = case t of
   Cat n g -> Cat n (map f << g)
 
 {-| `upTil n f` is conceptually the sequence 
+
     [f 0, f 1,..., f (n - 1)]
 -}
 upTil : Int -> (Int -> a) -> Iterator a
 upTil = Fun
 
 {-| `range start stop` is conceptually the sequence
+
     [start, start + 1,...,stop]
 -}
 range : Int -> Int -> Iterator Int
@@ -77,8 +79,9 @@ but we would like for this fold to return early with the first `x` satisfying `p
 So, we have foldWhile which stops folding once a `Finished x` value is found. We
 can thus express `find : (a -> Bool) -> Iterator a -> Maybe a` as
 
-  find f = foldWhile (\x _ -> if f x then Finished (Just x) else KeepGoing Nothing)
-             (KeepGoing Nothing)
+    find f = foldWhile (\x _ -> if f x then Finished (Just x) else KeepGoing Nothing)
+               (KeepGoing Nothing)
+
 -}
 foldWhile : (a -> b -> Status b) -> Status b -> Iterator a -> b
 foldWhile f z t = extract <| foldWhile' f z t
