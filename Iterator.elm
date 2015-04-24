@@ -31,10 +31,10 @@ concatenation, and most importantly, folding in constant space with early return
 @docs fold, Status, foldWhile, find, all, and
 -}
 
-import List((::))
+import List exposing ((::))
 import Array
 import Trampoline
-import Trampoline(Trampoline(..))
+import Trampoline exposing (Trampoline(..))
 
 type Iterator a
   = Fun Int (Int -> a)
