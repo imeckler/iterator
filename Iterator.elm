@@ -21,6 +21,9 @@ module Iterator
 an `Int` indicating its "length". It's a simple data type supporting mapping,
 concatenation, and most importantly, folding in constant space with early return.
 
+# Type
+@docs Iterator
+
 # Introduction
 @docs upTil, range, fromArray, fromList
 
@@ -28,14 +31,14 @@ concatenation, and most importantly, folding in constant space with early return
 @docs map, concat, concatMap, indexedMap
 
 # Elimination
-@docs fold, Status, foldWhile, find, all, and
+@docs fold, Status, foldWhile, find, findMany, all, and
 -}
 
 import List exposing ((::))
 import Array
-import Trampoline
-import Trampoline exposing (Trampoline(..))
+import Debug
 
+{-| -}
 type Iterator a
   = Fun Int (Int -> a)
   | Cat Int (Int -> Iterator a)
@@ -46,6 +49,7 @@ map f t = case t of
   Fun n g -> Fun n (f << g)
   Cat n g -> Cat n (map f << g)
 
+{-| -}
 indexedMap : (Int -> a -> b) -> Iterator a -> Iterator b
 indexedMap f t = case t of
   Fun n g -> Fun n (\i -> f i (g i))
@@ -65,13 +69,19 @@ upTil = Fun
 range : Int -> Int -> Iterator Int
 range start stop = upTil (stop - start + 1) (\i -> start + i)
 
+{-| -}
 fromList : List a -> Iterator a
 fromList = fromArray << Array.fromList
 
+{-| -}
 fromArray : Array.Array a -> Iterator a
 fromArray a =
   let n = Array.length a in
-  upTil n (\i -> case Array.get i a of Just x -> x)
+  upTil n (\i ->
+    case Array.get i a of
+      Nothing -> Debug.crash "Impossible!"
+      Just x -> x
+    )
 
 
 {-| Concatenate an iterator of iterators. -}
@@ -110,12 +120,15 @@ foldWhile f z t = extract <| foldWhile' f z t
 
 foldWhileFun' : (a -> b -> Status b) -> Status b -> Int -> (Int -> a) -> Status b
 foldWhileFun' f z n g =
-  let go acc k = case acc of
-        Finished _  -> Done acc
-        KeepGoing x ->
-          if k == n then Done (KeepGoing x) else Continue (\() -> go (f (g k) x) (k + 1))
+  let go acc k =
+    case acc of
+      Finished _  -> acc
+      KeepGoing x ->
+        if k == n
+        then KeepGoing x
+        else go (f (g k) x) (k + 1)
   in
-  Trampoline.trampoline (go z 0)
+  go z 0
 
 extract : Status a -> a
 extract t = case t of
@@ -129,8 +142,12 @@ foldWhile' f z t = case t of
 
 foldFun : (a -> b -> b) -> b -> Int -> (Int -> a) -> b
 foldFun f z n g =
-  let go acc i = if i == n then Done acc else Continue (\() -> go (f (g i) acc) (i + 1)) in
-  Trampoline.trampoline (go z 0)
+  let go acc i =
+    if i == n
+    then acc
+    else go (f (g i) acc) (i + 1)
+  in
+  go z 0
 
 {-| Folds until the bitter end. -}
 fold : (a -> b -> b) -> b -> Iterator a -> b
@@ -145,15 +162,17 @@ find f = foldWhile (\x _ -> if f x then Finished (Just x) else KeepGoing Nothing
 {-| Find the at most `k` first elements in the sequence satisfying the given property. -}
 findMany : Int -> (a -> Bool) -> Iterator a -> List a
 findMany k p = fst << foldWhile (\x (acc, n) ->
-  if | n == 0    -> Finished (acc, 0)
-     | p x       -> KeepGoing (x::acc, n - 1)
-     | otherwise -> KeepGoing (acc, n)) (KeepGoing ([], k))
+  if n == 0
+  then Finished (acc, 0)
+  else if p x then KeepGoing (x::acc, n - 1)
+  else KeepGoing (acc, n)) (KeepGoing ([], k))
 
 -- TODO: I guess there's no evidenceful version of this.
 {-| Check if `all` element in your sequence satisfy the given property. -}
 all : (a -> Bool) -> Iterator a -> Bool
 all p = foldWhile (\x _ -> if p x then KeepGoing True else Finished False) (KeepGoing True)
 
+{-| Check if all values are true. -}
 and : Iterator Bool -> Bool
 and = all identity
 
